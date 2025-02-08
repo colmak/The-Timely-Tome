@@ -1,0 +1,17 @@
+[Unit]
+Description=Update e-Paper Display on Startup
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/admin/The-Timely-Tome/scripts/update_eink.py
+WorkingDirectory=/home/admin/The-Timely-Tome/scripts
+Restart=on-failure
+User=admin
+Group=admin
+Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+StandardOutput=append:/home/admin/eink.log
+StandardError=append:/home/admin/eink_error.log
+
+[Install]
+WantedBy=multi-user.target
