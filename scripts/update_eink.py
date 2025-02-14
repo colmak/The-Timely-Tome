@@ -3,15 +3,24 @@ import os
 os.environ["DISPLAY"] = ":0"
 import random
 import datetime
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import logging
 import time
 
-#log_file = "/home/pi/eink_debug.log"
-#logging.basicConfig(filename=log_file, level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging to output to a file (this file will be appended)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s: %(message)s',
+    filename='/home/admin/eink_debug.log',
+    filemode='a'
+)
 
-#logging.debug("Running e-Paper update script...")
-#logging.debug(f"Current environment variables: {os.environ}")
+# If you also want messages to appear on the console (optional)
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
+console.setFormatter(formatter)
+logging.getLogger('').addHandler(console)
 
 # Import Waveshare e-Paper driver
 import sys
@@ -21,7 +30,7 @@ sys.path.append('/home/admin/e-Paper/RaspberryPi_JetsonNano/python/lib/waveshare
 import epd4in26  # Import the correct e-Paper display driver
 
 # Set correct dimensions for 4.26-inch e-Paper display
-EPD_WIDTH = 800  # Update to match epd4in26 specs
+EPD_WIDTH = 800  
 EPD_HEIGHT = 480
 IMAGES_DIR = os.path.join(os.path.dirname(__file__), "..", "images")
 
@@ -53,8 +62,72 @@ def pick_random_image_for_current_minute():
     
     return random.choice(matching)
 
+def create_message_image(message: str):
+    # Create a blank white image for the e-Paper display.
+    image = Image.new("1", (EPD_WIDTH, EPD_HEIGHT), 255)
+    draw = ImageDraw.Draw(image)
+
+    # Set a padding and define the maximum text width.
+    padding = 20
+    max_text_width = EPD_WIDTH - 2 * padding
+
+    # Try to load a truetype font; fallback to default if unavailable.
+    try:
+        # You can adjust the font path and size as needed.
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 48)
+    except Exception as e:
+        logging.warning("Could not load truetype font, using default font: " + str(e))
+        font = ImageFont.load_default()
+
+    # Manually wrap text based on pixel width.
+    words = message.split()
+    lines = []
+    current_line = ""
+    for word in words:
+        test_line = f"{current_line} {word}" if current_line else word
+        line_width, _ = draw.textsize(test_line, font=font)
+        if line_width <= max_text_width:
+            current_line = test_line
+        else:
+            if current_line:
+                lines.append(current_line)
+            current_line = word
+    if current_line:
+        lines.append(current_line)
+
+    # Calculate total height of the text block.
+    # Using font.getsize to estimate the height of a representative character.
+    _, line_height = draw.textsize("A", font=font)
+    total_text_height = line_height * len(lines)
+
+    # Calculate starting y position to center text vertically.
+    y = (EPD_HEIGHT - total_text_height) // 2
+
+    # Draw each line centered horizontally.
+    for line in lines:
+        line_width, _ = draw.textsize(line, font=font)
+        x = (EPD_WIDTH - line_width) // 2
+        draw.text((x, y), line, font=font, fill=0)
+        y += line_height
+
+    return image
+
 def main():
     logging.info("Initializing e-Paper display...")
+    message_file = "/home/admin/message.txt"
+    if os.path.exists(message_file):
+        with open(message_file, "r") as f:
+            message = f.read().strip()
+        if message:
+            logging.info("Custom message found. Displaying message: " + message)
+            image = create_message_image(message)  
+            epd = epd4in26.EPD()
+            epd.init()
+            epd.display(epd.getbuffer(image))
+            epd.sleep()
+            os.remove(message_file)
+            return 
+            
     epd = epd4in26.EPD()
     epd.init()
 
@@ -63,7 +136,7 @@ def main():
     # Only do a full clear occasionally
     if update_count % UPDATE_COUNT == 0:
         logging.info("Performing full screen clear to prevent ghosting...")
-        epd.init()
+        epd.Clear()
     else:
         logging.info("Skipping full clear to reduce flashing...")
 
