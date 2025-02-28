@@ -1,3 +1,4 @@
+![clock png](https://github.com/user-attachments/assets/89707382-4ea3-46ad-b2e0-475735db5f92)
 # The Timely Tome: E-Ink Book Quote Clock
 
 **The Timely Tome** is a Raspberry Pi–based eInk “clock” that displays pre-generated quotes or excerpts corresponding to the current time.  
